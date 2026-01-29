@@ -13,6 +13,7 @@
 - ✅ Repository created and initialized
 - ✅ Project structure defined
 - ✅ Roadmap created
+- ✅ Remote URL download capability added to roadmap
 
 ---
 
@@ -34,8 +35,8 @@
 ## Upcoming Steps
 1. STEP1: Database backup functionality
 2. STEP2: File archiving system
-3. STEP3: Installer generator
-4. STEP4: Deployment and extraction
+3. STEP3: Installer generator (with URL download config)
+4. STEP4: Remote download & extraction
 5. STEP5: Database restoration
 6. STEP6: WordPress configuration updates
 7. STEP7: Admin credentials modification
@@ -46,10 +47,11 @@
 ## Notes
 - Using PHP 7.4+ for WordPress compatibility
 - ZipArchive for file compression
+- Remote URL download via cURL/file_get_contents
 - Security: CSRF tokens, input validation, secure cleanup
 - Target: Production-ready backup/restore tool
 
 ---
 
 **Last Updated**: 2026-01-29  
-**Commit**: feat: initialize Wuplicator project structure with roadmap
+**Commit**: feat: add remote URL download capability to installer roadmap
