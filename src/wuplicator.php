@@ -14,6 +14,19 @@ class Wuplicator {
     private $wpRoot;
     private $backupDir;
     private $errors = [];
+    private $defaultExcludes = [
+        'wuplicator-backups',
+        'wp-content/cache',
+        'wp-content/backup',
+        'wp-content/backups',
+        'wp-content/uploads/backup',
+        '.git',
+        '.svn',
+        'node_modules',
+        '.DS_Store',
+        'error_log',
+        'debug.log'
+    ];
     
     /**
      * Initialize Wuplicator
@@ -248,6 +261,158 @@ class Wuplicator {
     }
     
     /**
+     * Scan directory recursively
+     * 
+     * @param string $path Directory path
+     * @param array $excludes Exclusion patterns
+     * @return array File paths relative to WordPress root
+     */
+    public function scanDirectory($path, $excludes = []) {
+        $files = [];
+        $excludes = array_merge($this->defaultExcludes, $excludes);
+        
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+        
+        foreach ($iterator as $item) {
+            // Skip symbolic links
+            if ($item->isLink()) {
+                continue;
+            }
+            
+            $filePath = $item->getPathname();
+            $relativePath = str_replace($this->wpRoot . '/', '', $filePath);
+            
+            // Check exclusions
+            $excluded = false;
+            foreach ($excludes as $pattern) {
+                // Pattern matching: exact match or wildcard
+                if (strpos($relativePath, $pattern) !== false) {
+                    $excluded = true;
+                    break;
+                }
+                
+                // Wildcard pattern (*.log, *.tmp)
+                if (strpos($pattern, '*') !== false) {
+                    $regex = '/^' . str_replace('\*', '.*', preg_quote($pattern, '/')) . '$/';
+                    if (preg_match($regex, basename($relativePath))) {
+                        $excluded = true;
+                        break;
+                    }
+                }
+            }
+            
+            if ($excluded) {
+                continue;
+            }
+            
+            // Add files only (directories are created implicitly in ZIP)
+            if ($item->isFile()) {
+                $files[] = $relativePath;
+            }
+        }
+        
+        return $files;
+    }
+    
+    /**
+     * Create ZIP archive of WordPress files
+     * 
+     * @param array $customExcludes Custom exclusion patterns
+     * @return string Path to ZIP archive
+     * @throws Exception If archive creation fails
+     */
+    public function createFilesBackup($customExcludes = []) {
+        echo "[Wuplicator] Starting files backup...\n";
+        
+        // Check ZipArchive extension
+        if (!class_exists('ZipArchive')) {
+            throw new Exception("ZipArchive extension not available. Install php-zip.");
+        }
+        
+        // Scan files
+        echo "[1/3] Scanning WordPress directory...\n";
+        $files = $this->scanDirectory($this->wpRoot, $customExcludes);
+        $fileCount = count($files);
+        echo "  Found {$fileCount} files\n";
+        
+        if ($fileCount === 0) {
+            throw new Exception("No files found to backup");
+        }
+        
+        // Create ZIP archive
+        echo "[2/3] Creating ZIP archive...\n";
+        $timestamp = date('Y-m-d_H-i-s');
+        $zipFile = $this->backupDir . "/files-{$timestamp}.zip";
+        
+        $zip = new ZipArchive();
+        if ($zip->open($zipFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new Exception("Failed to create ZIP archive: {$zipFile}");
+        }
+        
+        // Add files to archive
+        $processed = 0;
+        $lastProgress = 0;
+        
+        foreach ($files as $file) {
+            $fullPath = $this->wpRoot . '/' . $file;
+            
+            // Skip if file no longer exists or is not readable
+            if (!file_exists($fullPath) || !is_readable($fullPath)) {
+                continue;
+            }
+            
+            $zip->addFile($fullPath, $file);
+            $processed++;
+            
+            // Progress feedback every 10%
+            $progress = floor(($processed / $fileCount) * 100);
+            if ($progress >= $lastProgress + 10) {
+                echo "  Progress: {$progress}% ({$processed}/{$fileCount} files)\n";
+                $lastProgress = $progress;
+            }
+        }
+        
+        $zip->close();
+        
+        // Validate archive
+        echo "[3/3] Validating archive...\n";
+        if (!$this->validateArchive($zipFile)) {
+            throw new Exception("Archive validation failed");
+        }
+        
+        $fileSize = $this->formatBytes(filesize($zipFile));
+        echo "\n[SUCCESS] Files backup created: {$zipFile}\n";
+        echo "Files archived: {$processed}\n";
+        echo "Archive size: {$fileSize}\n";
+        
+        return $zipFile;
+    }
+    
+    /**
+     * Validate ZIP archive integrity
+     * 
+     * @param string $zipPath Path to ZIP file
+     * @return bool True if valid
+     */
+    public function validateArchive($zipPath) {
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CHECKCONS) !== true) {
+            return false;
+        }
+        
+        $numFiles = $zip->numFiles;
+        $zip->close();
+        
+        echo "  Archive contains {$numFiles} files\n";
+        echo "  Integrity check: PASSED\n";
+        
+        return $numFiles > 0;
+    }
+    
+    /**
      * Format bytes to human-readable size
      * 
      * @param int $bytes Bytes
@@ -266,13 +431,20 @@ class Wuplicator {
 // CLI execution
 if (php_sapi_name() === 'cli') {
     echo "===================================\n";
-    echo "  Wuplicator - Database Backup\n";
+    echo "  Wuplicator - WordPress Backup\n";
     echo "===================================\n\n";
     
     try {
         $wuplicator = new Wuplicator();
+        
+        // Create database backup
         $sqlFile = $wuplicator->createDatabaseBackup();
-        echo "\n✓ Backup completed successfully\n";
+        
+        // Create files backup
+        echo "\n";
+        $zipFile = $wuplicator->createFilesBackup();
+        
+        echo "\n✓ Complete backup created successfully\n";
         exit(0);
     } catch (Exception $e) {
         echo "\n✗ ERROR: " . $e->getMessage() . "\n";
