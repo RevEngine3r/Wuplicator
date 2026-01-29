@@ -84,7 +84,31 @@ class Wuplicator {
         $config['DB_CHARSET'] = $config['DB_CHARSET'] ?? 'utf8mb4';
         $config['DB_COLLATE'] = $config['DB_COLLATE'] ?? '';
         
+        // Get table prefix
+        if (preg_match("/\$table_prefix\s*=\s*'([^']+)'/", $content, $matches)) {
+            $config['table_prefix'] = $matches[1];
+        } else {
+            $config['table_prefix'] = 'wp_';
+        }
+        
         return $config;
+    }
+    
+    /**
+     * Get site URL from database
+     * 
+     * @param PDO $pdo Database connection
+     * @param string $tablePrefix Table prefix
+     * @return string Site URL
+     */
+    private function getSiteURL($pdo, $tablePrefix) {
+        try {
+            $stmt = $pdo->query("SELECT option_value FROM {$tablePrefix}options WHERE option_name = 'siteurl' LIMIT 1");
+            $url = $stmt->fetchColumn();
+            return $url ?: '';
+        } catch (Exception $e) {
+            return '';
+        }
     }
     
     /**
@@ -228,7 +252,7 @@ class Wuplicator {
         // Create SQL file
         echo "[4/4] Exporting database...\n";
         $timestamp = date('Y-m-d_H-i-s');
-        $sqlFile = $this->backupDir . "/database-{$timestamp}.sql";
+        $sqlFile = $this->backupDir . "/database.sql";
         
         $sql = "-- Wuplicator Database Backup\n";
         $sql .= "-- Generated: " . date('Y-m-d H:i:s') . "\n";
@@ -254,7 +278,7 @@ class Wuplicator {
         }
         
         $fileSize = $this->formatBytes(filesize($sqlFile));
-        echo "\n[SUCCESS] Database backup created: {$sqlFile}\n";
+        echo "\n[SUCCESS] Database backup created\n";
         echo "File size: {$fileSize}\n";
         
         return $sqlFile;
@@ -344,8 +368,7 @@ class Wuplicator {
         
         // Create ZIP archive
         echo "[2/3] Creating ZIP archive...\n";
-        $timestamp = date('Y-m-d_H-i-s');
-        $zipFile = $this->backupDir . "/files-{$timestamp}.zip";
+        $zipFile = $this->backupDir . "/backup.zip";
         
         $zip = new ZipArchive();
         if ($zip->open($zipFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
@@ -384,7 +407,7 @@ class Wuplicator {
         }
         
         $fileSize = $this->formatBytes(filesize($zipFile));
-        echo "\n[SUCCESS] Files backup created: {$zipFile}\n";
+        echo "\n[SUCCESS] Files backup created\n";
         echo "Files archived: {$processed}\n";
         echo "Archive size: {$fileSize}\n";
         
@@ -413,6 +436,102 @@ class Wuplicator {
     }
     
     /**
+     * Generate installer.php with embedded metadata
+     * 
+     * @return string Path to installer file
+     */
+    public function generateInstaller() {
+        echo "\n[Wuplicator] Generating installer...\n";
+        
+        // Get site metadata
+        $config = $this->parseWpConfig();
+        $pdo = $this->connectDatabase($config);
+        $siteUrl = $this->getSiteURL($pdo, $config['table_prefix']);
+        
+        // Read installer template
+        $templatePath = dirname(__FILE__) . '/installer.php';
+        if (!file_exists($templatePath)) {
+            throw new Exception("Installer template not found");
+        }
+        
+        $installer = file_get_contents($templatePath);
+        
+        // Generate security token
+        $token = bin2hex(random_bytes(32));
+        
+        // Embed metadata
+        $installer = str_replace('WUPLICATOR_TOKEN_PLACEHOLDER', $token, $installer);
+        $installer = str_replace('TIMESTAMP_PLACEHOLDER', date('Y-m-d H:i:s'), $installer);
+        $installer = str_replace('DB_NAME_PLACEHOLDER', $config['DB_NAME'], $installer);
+        $installer = str_replace('TABLE_PREFIX_PLACEHOLDER', $config['table_prefix'], $installer);
+        $installer = str_replace('SITE_URL_PLACEHOLDER', $siteUrl, $installer);
+        
+        // Save installer
+        $installerPath = $this->backupDir . '/installer.php';
+        if (file_put_contents($installerPath, $installer) === false) {
+            throw new Exception("Failed to write installer");
+        }
+        
+        echo "  Installer generated with security token\n";
+        echo "  Original site: {$siteUrl}\n";
+        echo "  Table prefix: {$config['table_prefix']}\n";
+        
+        return $installerPath;
+    }
+    
+    /**
+     * Create complete backup package
+     * 
+     * @return array Package information
+     */
+    public function createPackage() {
+        echo "\n" . str_repeat('=', 50) . "\n";
+        echo "  WUPLICATOR - Complete Backup Package Creator\n";
+        echo str_repeat('=', 50) . "\n\n";
+        
+        $startTime = microtime(true);
+        
+        // Create database backup
+        $sqlFile = $this->createDatabaseBackup();
+        
+        // Create files backup
+        echo "\n";
+        $zipFile = $this->createFilesBackup();
+        
+        // Generate installer
+        $installerFile = $this->generateInstaller();
+        
+        // Copy database.sql to backup directory (already there)
+        
+        $duration = round(microtime(true) - $startTime, 2);
+        
+        echo "\n" . str_repeat('=', 50) . "\n";
+        echo "  BACKUP PACKAGE COMPLETE\n";
+        echo str_repeat('=', 50) . "\n";
+        echo "\nPackage location: {$this->backupDir}/\n";
+        echo "\nFiles created:\n";
+        echo "  1. installer.php - Deployment script\n";
+        echo "  2. backup.zip    - WordPress files\n";
+        echo "  3. database.sql  - Database dump\n";
+        echo "\nTotal time: {$duration}s\n";
+        echo "\nDEPLOYMENT INSTRUCTIONS:\n";
+        echo "1. Upload all 3 files to your new host\n";
+        echo "2. Edit installer.php configuration (database, URLs, admin)\n";
+        echo "3. Visit installer.php in browser\n";
+        echo "4. Follow the installation wizard\n";
+        echo "5. Delete installer.php after completion\n";
+        echo "\n";
+        
+        return [
+            'installer' => $installerFile,
+            'backup_zip' => $zipFile,
+            'database_sql' => $sqlFile,
+            'directory' => $this->backupDir,
+            'duration' => $duration
+        ];
+    }
+    
+    /**
      * Format bytes to human-readable size
      * 
      * @param int $bytes Bytes
@@ -430,24 +549,13 @@ class Wuplicator {
 
 // CLI execution
 if (php_sapi_name() === 'cli') {
-    echo "===================================\n";
-    echo "  Wuplicator - WordPress Backup\n";
-    echo "===================================\n\n";
-    
     try {
         $wuplicator = new Wuplicator();
-        
-        // Create database backup
-        $sqlFile = $wuplicator->createDatabaseBackup();
-        
-        // Create files backup
-        echo "\n";
-        $zipFile = $wuplicator->createFilesBackup();
-        
-        echo "\n✓ Complete backup created successfully\n";
+        $package = $wuplicator->createPackage();
+        echo "\u2713 Backup package created successfully\n\n";
         exit(0);
     } catch (Exception $e) {
-        echo "\n✗ ERROR: " . $e->getMessage() . "\n";
+        echo "\n\u2717 ERROR: " . $e->getMessage() . "\n\n";
         exit(1);
     }
 }
