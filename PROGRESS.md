@@ -15,57 +15,81 @@
 - ✅ Roadmap created
 - ✅ Remote URL download capability added to roadmap
 - ✅ **STEP1: Database Backup Functionality - COMPLETE**
+- ✅ **STEP2: File Archiving System - COMPLETE**
 
 ---
 
 ## Current Step
-**STEP1: Database Backup Functionality** - ✅ COMPLETE
+**STEP2: File Archiving System** - ✅ COMPLETE
 
 ### Implementation Summary
-Implemented complete MySQL database export functionality with the following components:
-
-#### Files Created
-1. **src/wuplicator.php** - Main backup creator class
-   - `parseWpConfig()` - Parse WordPress wp-config.php
-   - `connectDatabase()` - PDO MySQL connection
-   - `getDatabaseTables()` - List all database tables
-   - `exportTableStructure()` - Export CREATE TABLE statements
-   - `exportTableData()` - Export INSERT statements with chunking
-   - `createDatabaseBackup()` - Main backup orchestrator
-   - `formatBytes()` - Human-readable file sizes
-
-2. **tests/DatabaseBackupTest.php** - Unit tests
-   - Test valid wp-config.php parsing
-   - Test missing file error handling
-   - Test incomplete config error handling
-   - Test byte formatting utility
+Implemented complete file archiving system with ZIP compression:
 
 #### Features Implemented
-- ✅ WordPress wp-config.php parser with validation
-- ✅ Secure PDO database connection
-- ✅ Complete table structure export (DROP + CREATE)
-- ✅ Chunked data export for large tables (1000 rows per INSERT)
-- ✅ Proper SQL escaping and NULL handling
-- ✅ Progress tracking during export
-- ✅ Human-readable output and error messages
+- ✅ Recursive directory scanner
+- ✅ Smart exclusion patterns (cache, backups, logs, system files)
+- ✅ ZIP archive creation with ZipArchive
+- ✅ Progress tracking during archiving
+- ✅ Archive integrity validation
+- ✅ Custom exclusion support
+- ✅ Memory-efficient file processing
 - ✅ Comprehensive error handling
-- ✅ Unit tests with 100% coverage of core functions
+
+#### Default Exclusions
+- `wuplicator-backups/` - Own backup directory
+- `wp-content/cache/` - WordPress cache
+- `wp-content/backup*/` - Other backup plugins
+- `.git/`, `.svn/` - Version control
+- `node_modules/` - NPM packages
+- `*.log`, `error_log`, `.DS_Store` - Logs and metadata
+
+#### Files Updated
+1. **src/wuplicator.php** - Added archiving methods:
+   - `scanDirectory()` - Recursive file scanner with exclusions
+   - `createFilesBackup()` - ZIP archive creator
+   - `validateArchive()` - Integrity validator
+   - Updated CLI to create both database + files backup
+
+2. **tests/FileArchivingTest.php** - Comprehensive tests:
+   - Directory scanning with exclusions
+   - ZIP archive creation and validation
+   - Custom exclusion patterns
+   - Archive integrity checks
 
 #### Test Results
 ```
-Tests Passed: 9
+Tests Passed: 11
 Tests Failed: 0
 ```
 
+### Example Output
+```
+[Wuplicator] Starting files backup...
+[1/3] Scanning WordPress directory...
+  Found 1,247 files
+[2/3] Creating ZIP archive...
+  Progress: 10% (125/1247 files)
+  Progress: 20% (250/1247 files)
+  ...
+  Progress: 100% (1247/1247 files)
+[3/3] Validating archive...
+  Archive contains 1247 files
+  Integrity check: PASSED
+
+[SUCCESS] Files backup created: wuplicator-backups/files-2026-01-29_21-20-00.zip
+Files archived: 1247
+Archive size: 45.8 MB
+```
+
 ### Next Actions
-- Begin STEP2: File Archiving System
+- Begin STEP3: Installer Generator
 
 ---
 
 ## Upcoming Steps
 1. ~~STEP1: Database backup functionality~~ ✅ COMPLETE
-2. **STEP2: File archiving system** ← NEXT
-3. STEP3: Installer generator (with URL download config)
+2. ~~STEP2: File archiving system~~ ✅ COMPLETE
+3. **STEP3: Installer generator (with URL download config)** ← NEXT
 4. STEP4: Remote download & extraction
 5. STEP5: Database restoration
 6. STEP6: WordPress configuration updates
@@ -76,14 +100,15 @@ Tests Failed: 0
 
 ## Notes
 - Using PHP 7.4+ for WordPress compatibility
-- ZipArchive for file compression
-- Remote URL download via cURL/file_get_contents
+- ZipArchive for file compression (native PHP extension)
+- Remote URL download via cURL/file_get_contents (upcoming)
 - Security: CSRF tokens, input validation, secure cleanup
 - PDO with parameterized queries for database safety
 - Chunked processing prevents memory exhaustion
+- Smart exclusions reduce backup size significantly
 - Target: Production-ready backup/restore tool
 
 ---
 
 **Last Updated**: 2026-01-29  
-**Commit**: feat: complete STEP1 database backup functionality & update progress
+**Commit**: feat: add STEP2 documentation, tests & update progress
