@@ -5,7 +5,7 @@
  * Deploys WordPress backup to new host with customization options.
  * Supports remote URL downloads and admin credential changes.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  * @author RevEngine3r
  */
 
@@ -29,6 +29,10 @@ $NEW_SITE_URL = ''; // e.g., 'https://newsite.com'
 // New Admin Credentials (optional - leave empty to keep existing)
 $NEW_ADMIN_USER = ''; // e.g., 'admin_ls45g'
 $NEW_ADMIN_PASS = ''; // e.g., 'slkjdfhnb874'
+
+// Security Enhancements (NEW)
+$RANDOMIZE_ADMIN_USER = false; // Set true to generate random username (admin_[5 chars])
+$RANDOMIZE_ADMIN_PASS = false; // Set true to generate random password (12 chars)
 
 // Security token (auto-generated, do not modify)
 $SECURITY_TOKEN = 'WUPLICATOR_TOKEN_PLACEHOLDER';
@@ -231,6 +235,7 @@ class WuplicatorInstaller {
     private function configureWordPress() {
         global $NEW_DB_HOST, $NEW_DB_NAME, $NEW_DB_USER, $NEW_DB_PASSWORD, $NEW_SITE_URL;
         global $NEW_ADMIN_USER, $NEW_ADMIN_PASS, $BACKUP_METADATA;
+        global $RANDOMIZE_ADMIN_USER, $RANDOMIZE_ADMIN_PASS;
         
         $this->log('Configuring WordPress...');
         
@@ -254,8 +259,8 @@ class WuplicatorInstaller {
             $this->replaceURLs($oldUrl, $NEW_SITE_URL);
         }
         
-        // Change admin credentials
-        if (!empty($NEW_ADMIN_USER) || !empty($NEW_ADMIN_PASS)) {
+        // Change admin credentials (existing, manual, or generated)
+        if (!empty($NEW_ADMIN_USER) || !empty($NEW_ADMIN_PASS) || $RANDOMIZE_ADMIN_USER || $RANDOMIZE_ADMIN_PASS) {
             $this->updateAdminCredentials($NEW_ADMIN_USER, $NEW_ADMIN_PASS);
         }
     }
@@ -285,10 +290,64 @@ class WuplicatorInstaller {
         }
     }
     
+    /**
+     * Generate random admin username
+     * Pattern: admin_[5 random alphanumeric chars]
+     * 
+     * @return string Generated username (e.g., 'admin_aB3x9')
+     */
+    private function generateRandomUsername() {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $suffix = '';
+        $length = 5;
+        
+        for ($i = 0; $i < $length; $i++) {
+            $suffix .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        
+        return 'admin_' . $suffix;
+    }
+    
+    /**
+     * Generate random admin password
+     * Pattern: 12 random alphanumeric chars (upper, lower, numbers)
+     * 
+     * @return string Generated password (e.g., 'sL8kJ3hG9mP2')
+     */
+    private function generateRandomPassword() {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        $password = '';
+        $length = 12;
+        
+        for ($i = 0; $i < $length; $i++) {
+            $password .= $chars[random_int(0, strlen($chars) - 1)];
+        }
+        
+        return $password;
+    }
+    
     private function updateAdminCredentials($newUser, $newPass) {
         global $NEW_DB_HOST, $NEW_DB_NAME, $NEW_DB_USER, $NEW_DB_PASSWORD, $BACKUP_METADATA;
+        global $RANDOMIZE_ADMIN_USER, $RANDOMIZE_ADMIN_PASS;
         
         $this->log('Updating admin credentials...');
+        
+        // Generate random credentials if flags enabled
+        if ($RANDOMIZE_ADMIN_USER) {
+            $newUser = $this->generateRandomUsername();
+            $this->log("Generated random username: {$newUser}");
+        }
+        
+        if ($RANDOMIZE_ADMIN_PASS) {
+            $newPass = $this->generateRandomPassword();
+            $this->log("Generated random password: {$newPass}");
+        }
+        
+        // Skip if no credentials to update
+        if (empty($newUser) && empty($newPass)) {
+            $this->log('No admin credentials to update');
+            return;
+        }
         
         try {
             $pdo = new PDO("mysql:host={$NEW_DB_HOST};dbname={$NEW_DB_NAME}", $NEW_DB_USER, $NEW_DB_PASSWORD);
@@ -309,7 +368,7 @@ class WuplicatorInstaller {
             if (!empty($newUser)) {
                 $stmt = $pdo->prepare("UPDATE {$prefix}users SET user_login = ? WHERE ID = ?");
                 $stmt->execute([$newUser, $adminId]);
-                $this->log("Admin username changed to: {$newUser}");
+                $this->log("✓ Admin username set to: {$newUser}");
             }
             
             // Update password
@@ -320,8 +379,17 @@ class WuplicatorInstaller {
                 
                 $stmt = $pdo->prepare("UPDATE {$prefix}users SET user_pass = ? WHERE ID = ?");
                 $stmt->execute([$hashedPass, $adminId]);
-                $this->log('Admin password updated');
+                $this->log("✓ Admin password set to: {$newPass}");
             }
+            
+            // IMPORTANT: Store credentials for final display
+            if (!empty($newUser)) {
+                $_SESSION['final_admin_user'] = $newUser;
+            }
+            if (!empty($newPass)) {
+                $_SESSION['final_admin_pass'] = $newPass;
+            }
+            
         } catch (PDOException $e) {
             $this->error('Admin update failed: ' . $e->getMessage());
         }
@@ -329,6 +397,22 @@ class WuplicatorInstaller {
     
     private function finalizeInstallation() {
         $this->log('Finalizing installation...');
+        
+        // Display generated credentials if any
+        if (isset($_SESSION['final_admin_user']) || isset($_SESSION['final_admin_pass'])) {
+            $this->log('═══════════════════════════════════════');
+            $this->log('⚠️  IMPORTANT: SAVE THESE CREDENTIALS');
+            $this->log('═══════════════════════════════════════');
+            
+            if (isset($_SESSION['final_admin_user'])) {
+                $this->log("Admin Username: {$_SESSION['final_admin_user']}");
+            }
+            if (isset($_SESSION['final_admin_pass'])) {
+                $this->log("Admin Password: {$_SESSION['final_admin_pass']}");
+            }
+            
+            $this->log('═══════════════════════════════════════');
+        }
         
         // Delete backup files
         $zipFile = $this->workDir . '/backup.zip';
