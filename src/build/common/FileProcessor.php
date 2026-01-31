@@ -2,33 +2,45 @@
 /**
  * Wuplicator Build System - File Processor
  * 
- * Processes PHP files for compilation: removes tags, strips namespaces.
+ * Processes PHP files for compilation.
  * 
- * @package Wuplicator\Build
  * @version 1.2.0
  */
 
 class FileProcessor {
-    public function process(string $content): string {
-        // Remove opening PHP tag
-        $content = preg_replace('/^<\?php\s*/', '', $content);
+    
+    /**
+     * Process PHP file content
+     * - Remove PHP opening/closing tags
+     * - Remove namespace declarations
+     * - Remove use statements for internal namespaces
+     * - Preserve all class code
+     */
+    public function process($content) {
+        // Remove PHP tags
+        $content = $this->stripPHPTags($content);
         
-        // Remove closing PHP tag
-        $content = preg_replace('/\?>\s*$/', '', $content);
+        // Remove namespace declarations
+        $content = preg_replace('/^namespace\s+[^;]+;\s*$/m', '', $content);
         
-        // Strip namespace declarations but keep the classes
-        $content = preg_replace('/^namespace\s+[^;]+;\s*/m', '', $content);
+        // Remove use statements (internal namespaces only)
+        $content = preg_replace('/^use\s+Wuplicator\\[^;]+;\s*$/m', '', $content);
         
-        // Remove use statements
-        $content = preg_replace('/^use\s+[^;]+;\s*/m', '', $content);
+        // Remove multiple empty lines
+        $content = preg_replace('/\n{3,}/', "\n\n", $content);
         
-        // Normalize line endings
-        $content = str_replace("\r\n", "\n", $content);
-        $content = str_replace("\r", "\n", $content);
-        
-        // Trim leading/trailing whitespace but preserve internal structure
+        // Trim
         $content = trim($content);
         
         return $content;
+    }
+    
+    /**
+     * Strip PHP opening and closing tags
+     */
+    public function stripPHPTags($content) {
+        $content = preg_replace('/^<\?php\s*/i', '', $content);
+        $content = preg_replace('/\?>\s*$/', '', $content);
+        return trim($content);
     }
 }
