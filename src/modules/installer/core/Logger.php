@@ -1,9 +1,8 @@
 <?php
 /**
- * Wuplicator Installer - Logger Module
+ * Logger Module
  * 
- * @package Wuplicator\Installer\Core
- * @version 1.2.0
+ * Handles logging for installation operations.
  */
 
 namespace Wuplicator\Installer\Core;
@@ -11,26 +10,29 @@ namespace Wuplicator\Installer\Core;
 class Logger {
     
     private $logs = [];
-    private $errors = [];
     
+    /**
+     * Log a message
+     * 
+     * @param string $message Log message
+     */
     public function log($message) {
         $this->logs[] = $message;
     }
     
-    public function error($message) {
-        $this->errors[] = $message;
-        $this->log("ERROR: {$message}");
-    }
-    
+    /**
+     * Get all logs
+     * 
+     * @return array Log messages
+     */
     public function getLogs() {
         return $this->logs;
     }
     
-    public function getErrors() {
-        return $this->errors;
-    }
-    
-    public function hasErrors() {
-        return !empty($this->errors);
+    /**
+     * Clear all logs
+     */
+    public function clear() {
+        $this->logs = [];
     }
 }

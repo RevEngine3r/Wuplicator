@@ -1,20 +1,43 @@
 <?php
 /**
- * Wuplicator Installer - Configuration Module
+ * Configuration Module
  * 
- * @package Wuplicator\Installer\Core
- * @version 1.2.0
+ * Stores installer configuration and constants.
  */
 
 namespace Wuplicator\Installer\Core;
 
 class Config {
     
-    const VERSION = '1.2.0';
+    private $config = [];
     
-    /** @var int Download timeout in seconds */
-    const DOWNLOAD_TIMEOUT = 3600;
+    /**
+     * Set configuration value
+     * 
+     * @param string $key Configuration key
+     * @param mixed $value Configuration value
+     */
+    public function set($key, $value) {
+        $this->config[$key] = $value;
+    }
     
-    /** @var int SQL import chunk size (bytes) */
-    const SQL_CHUNK_SIZE = 1048576; // 1MB
+    /**
+     * Get configuration value
+     * 
+     * @param string $key Configuration key
+     * @param mixed $default Default value if not found
+     * @return mixed Configuration value
+     */
+    public function get($key, $default = null) {
+        return $this->config[$key] ?? $default;
+    }
+    
+    /**
+     * Get all configuration
+     * 
+     * @return array All configuration
+     */
+    public function all() {
+        return $this->config;
+    }
 }
