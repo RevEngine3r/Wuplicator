@@ -5,7 +5,7 @@
  * Creates complete WordPress site backups including database and files.
  * Generates installer.php for deployment to new hosts.
  * 
- * @version 1.0.0
+ * @version 1.1.0
  * @author RevEngine3r
  */
 
@@ -14,6 +14,7 @@ class Wuplicator {
     private $wpRoot;
     private $backupDir;
     private $errors = [];
+    private $logs = [];
     private $defaultExcludes = [
         'wuplicator-backups',
         'wp-content/cache',
@@ -231,26 +232,26 @@ class Wuplicator {
      * @throws Exception If backup fails
      */
     public function createDatabaseBackup() {
-        echo "[Wuplicator] Starting database backup...\n";
+        $this->log('Starting database backup...');
         
         // Parse wp-config.php
-        echo "[1/4] Parsing wp-config.php...\n";
+        $this->log('Parsing wp-config.php...');
         $config = $this->parseWpConfig();
-        echo "  Database: {$config['DB_NAME']}\n";
+        $this->log("Database: {$config['DB_NAME']}");
         
         // Connect to database
-        echo "[2/4] Connecting to database...\n";
+        $this->log('Connecting to database...');
         $pdo = $this->connectDatabase($config);
-        echo "  Connected successfully\n";
+        $this->log('Connected successfully');
         
         // Get tables
-        echo "[3/4] Scanning tables...\n";
+        $this->log('Scanning tables...');
         $tables = $this->getDatabaseTables($pdo, $config['DB_NAME']);
         $tableCount = count($tables);
-        echo "  Found {$tableCount} tables\n";
+        $this->log("Found {$tableCount} tables");
         
         // Create SQL file
-        echo "[4/4] Exporting database...\n";
+        $this->log('Exporting database...');
         $timestamp = date('Y-m-d_H-i-s');
         $sqlFile = $this->backupDir . "/database.sql";
         
@@ -266,7 +267,7 @@ class Wuplicator {
         // Export each table
         foreach ($tables as $index => $table) {
             $progress = $index + 1;
-            echo "  [{$progress}/{$tableCount}] Exporting: {$table}\n";
+            $this->log("[{$progress}/{$tableCount}] Exporting: {$table}");
             
             $sql .= $this->exportTableStructure($pdo, $table);
             $sql .= $this->exportTableData($pdo, $table);
@@ -278,8 +279,7 @@ class Wuplicator {
         }
         
         $fileSize = $this->formatBytes(filesize($sqlFile));
-        echo "\n[SUCCESS] Database backup created\n";
-        echo "File size: {$fileSize}\n";
+        $this->log("Database backup created: {$fileSize}");
         
         return $sqlFile;
     }
@@ -349,7 +349,7 @@ class Wuplicator {
      * @throws Exception If archive creation fails
      */
     public function createFilesBackup($customExcludes = []) {
-        echo "[Wuplicator] Starting files backup...\n";
+        $this->log('Starting files backup...');
         
         // Check ZipArchive extension
         if (!class_exists('ZipArchive')) {
@@ -357,17 +357,17 @@ class Wuplicator {
         }
         
         // Scan files
-        echo "[1/3] Scanning WordPress directory...\n";
+        $this->log('Scanning WordPress directory...');
         $files = $this->scanDirectory($this->wpRoot, $customExcludes);
         $fileCount = count($files);
-        echo "  Found {$fileCount} files\n";
+        $this->log("Found {$fileCount} files");
         
         if ($fileCount === 0) {
             throw new Exception("No files found to backup");
         }
         
         // Create ZIP archive
-        echo "[2/3] Creating ZIP archive...\n";
+        $this->log('Creating ZIP archive...');
         $zipFile = $this->backupDir . "/backup.zip";
         
         $zip = new ZipArchive();
@@ -393,7 +393,7 @@ class Wuplicator {
             // Progress feedback every 10%
             $progress = floor(($processed / $fileCount) * 100);
             if ($progress >= $lastProgress + 10) {
-                echo "  Progress: {$progress}% ({$processed}/{$fileCount} files)\n";
+                $this->log("Progress: {$progress}% ({$processed}/{$fileCount} files)");
                 $lastProgress = $progress;
             }
         }
@@ -401,15 +401,14 @@ class Wuplicator {
         $zip->close();
         
         // Validate archive
-        echo "[3/3] Validating archive...\n";
+        $this->log('Validating archive...');
         if (!$this->validateArchive($zipFile)) {
             throw new Exception("Archive validation failed");
         }
         
         $fileSize = $this->formatBytes(filesize($zipFile));
-        echo "\n[SUCCESS] Files backup created\n";
-        echo "Files archived: {$processed}\n";
-        echo "Archive size: {$fileSize}\n";
+        $this->log("Files backup created: {$fileSize}");
+        $this->log("Files archived: {$processed}");
         
         return $zipFile;
     }
@@ -429,8 +428,8 @@ class Wuplicator {
         $numFiles = $zip->numFiles;
         $zip->close();
         
-        echo "  Archive contains {$numFiles} files\n";
-        echo "  Integrity check: PASSED\n";
+        $this->log("Archive contains {$numFiles} files");
+        $this->log("Integrity check: PASSED");
         
         return $numFiles > 0;
     }
@@ -441,7 +440,7 @@ class Wuplicator {
      * @return string Path to installer file
      */
     public function generateInstaller() {
-        echo "\n[Wuplicator] Generating installer...\n";
+        $this->log('Generating installer...');
         
         // Get site metadata
         $config = $this->parseWpConfig();
@@ -472,9 +471,9 @@ class Wuplicator {
             throw new Exception("Failed to write installer");
         }
         
-        echo "  Installer generated with security token\n";
-        echo "  Original site: {$siteUrl}\n";
-        echo "  Table prefix: {$config['table_prefix']}\n";
+        $this->log('Installer generated with security token');
+        $this->log("Original site: {$siteUrl}");
+        $this->log("Table prefix: {$config['table_prefix']}");
         
         return $installerPath;
     }
@@ -485,42 +484,22 @@ class Wuplicator {
      * @return array Package information
      */
     public function createPackage() {
-        echo "\n" . str_repeat('=', 50) . "\n";
-        echo "  WUPLICATOR - Complete Backup Package Creator\n";
-        echo str_repeat('=', 50) . "\n\n";
-        
         $startTime = microtime(true);
         
         // Create database backup
         $sqlFile = $this->createDatabaseBackup();
         
         // Create files backup
-        echo "\n";
         $zipFile = $this->createFilesBackup();
         
         // Generate installer
         $installerFile = $this->generateInstaller();
         
-        // Copy database.sql to backup directory (already there)
-        
         $duration = round(microtime(true) - $startTime, 2);
         
-        echo "\n" . str_repeat('=', 50) . "\n";
-        echo "  BACKUP PACKAGE COMPLETE\n";
-        echo str_repeat('=', 50) . "\n";
-        echo "\nPackage location: {$this->backupDir}/\n";
-        echo "\nFiles created:\n";
-        echo "  1. installer.php - Deployment script\n";
-        echo "  2. backup.zip    - WordPress files\n";
-        echo "  3. database.sql  - Database dump\n";
-        echo "\nTotal time: {$duration}s\n";
-        echo "\nDEPLOYMENT INSTRUCTIONS:\n";
-        echo "1. Upload all 3 files to your new host\n";
-        echo "2. Edit installer.php configuration (database, URLs, admin)\n";
-        echo "3. Visit installer.php in browser\n";
-        echo "4. Follow the installation wizard\n";
-        echo "5. Delete installer.php after completion\n";
-        echo "\n";
+        $this->log('Backup package complete!');
+        $this->log("Total time: {$duration}s");
+        $this->log("Package location: {$this->backupDir}/");
         
         return [
             'installer' => $installerFile,
@@ -545,17 +524,240 @@ class Wuplicator {
         $bytes /= (1 << (10 * $pow));
         return round($bytes, 2) . ' ' . $units[$pow];
     }
-}
-
-// CLI execution
-if (php_sapi_name() === 'cli') {
-    try {
-        $wuplicator = new Wuplicator();
-        $package = $wuplicator->createPackage();
-        echo "\u2713 Backup package created successfully\n\n";
-        exit(0);
-    } catch (Exception $e) {
-        echo "\n\u2717 ERROR: " . $e->getMessage() . "\n\n";
-        exit(1);
+    
+    /**
+     * Log message
+     * 
+     * @param string $message
+     */
+    private function log($message) {
+        $this->logs[] = $message;
+    }
+    
+    /**
+     * Log error
+     * 
+     * @param string $message
+     */
+    private function error($message) {
+        $this->errors[] = $message;
+    }
+    
+    /**
+     * Run web UI
+     */
+    public function run() {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $action = $_POST['action'] ?? '';
+            
+            if ($action === 'create_backup') {
+                try {
+                    $package = $this->createPackage();
+                    
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => true,
+                        'logs' => $this->logs,
+                        'package' => $package
+                    ]);
+                } catch (Exception $e) {
+                    header('Content-Type: application/json');
+                    echo json_encode([
+                        'success' => false,
+                        'errors' => [$e->getMessage()],
+                        'logs' => $this->logs
+                    ]);
+                }
+                exit;
+            }
+        }
+        
+        $this->renderUI();
+    }
+    
+    /**
+     * Render web UI
+     */
+    private function renderUI() {
+        // Get site info
+        try {
+            $config = $this->parseWpConfig();
+            $siteInfo = [
+                'db_name' => $config['DB_NAME'],
+                'table_prefix' => $config['table_prefix']
+            ];
+            
+            try {
+                $pdo = $this->connectDatabase($config);
+                $siteInfo['site_url'] = $this->getSiteURL($pdo, $config['table_prefix']);
+            } catch (Exception $e) {
+                $siteInfo['site_url'] = 'Unknown';
+            }
+        } catch (Exception $e) {
+            $siteInfo = [
+                'db_name' => 'Unknown',
+                'table_prefix' => 'Unknown',
+                'site_url' => 'Unknown'
+            ];
+        }
+        ?>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wuplicator - Create Backup</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px 8px 0 0; }
+        h1 { font-size: 28px; margin-bottom: 10px; }
+        .subtitle { opacity: 0.9; }
+        .content { padding: 30px; }
+        .step { display: none; }
+        .step.active { display: block; }
+        .progress { background: #e0e0e0; height: 8px; border-radius: 4px; margin-bottom: 30px; overflow: hidden; }
+        .progress-bar { background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); height: 100%; width: 0%; transition: width 0.3s; }
+        button { background: #667eea; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; cursor: pointer; }
+        button:hover { background: #5568d3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .log { background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 15px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 13px; }
+        .log-item { margin-bottom: 5px; }
+        .error { color: #d32f2f; font-weight: bold; }
+        .success { color: #388e3c; font-weight: bold; }
+        .info { margin-bottom: 20px; padding: 15px; background: #e3f2fd; border-left: 4px solid #2196f3; }
+        .warning { margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💾 Wuplicator Backup Creator</h1>
+            <div class="subtitle">WordPress Complete Backup Tool</div>
+        </div>
+        <div class="content">
+            <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+            
+            <div class="step active" id="step1">
+                <h2>Ready to Create Backup</h2>
+                <div class="info">
+                    <strong>Current Site Info:</strong><br>
+                    Database: <?php echo htmlspecialchars($siteInfo['db_name']); ?><br>
+                    Table Prefix: <?php echo htmlspecialchars($siteInfo['table_prefix']); ?><br>
+                    Site URL: <?php echo htmlspecialchars($siteInfo['site_url']); ?>
+                </div>
+                <p>This will create a complete backup package containing:</p>
+                <ul style="margin: 15px 0 15px 30px;">
+                    <li>Database dump (SQL file)</li>
+                    <li>All WordPress files (ZIP archive)</li>
+                    <li>Deployment installer</li>
+                </ul>
+                <div class="warning">
+                    <strong>⚠️ Important:</strong> Large sites may take several minutes. Do not close this page during backup creation.
+                </div>
+                <br>
+                <button onclick="startBackup()" id="startButton">Create Backup Package</button>
+            </div>
+            
+            <div class="step" id="step2">
+                <h2>Creating Backup...</h2>
+                <div class="log" id="logOutput"></div>
+                <br>
+                <div id="completionMessage"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function updateProgress(percent) {
+            document.getElementById('progressBar').style.width = percent + '%';
+        }
+        
+        function log(message, type = 'info') {
+            const logOutput = document.getElementById('logOutput');
+            const item = document.createElement('div');
+            item.className = 'log-item ' + type;
+            item.textContent = '• ' + message;
+            logOutput.appendChild(item);
+            logOutput.scrollTop = logOutput.scrollHeight;
+        }
+        
+        function showStep(step) {
+            document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+            document.getElementById('step' + step).classList.add('active');
+        }
+        
+        async function startBackup() {
+            document.getElementById('startButton').disabled = true;
+            showStep(2);
+            updateProgress(10);
+            
+            log('Initializing backup process...', 'info');
+            
+            const formData = new FormData();
+            formData.append('action', 'create_backup');
+            
+            try {
+                updateProgress(20);
+                const response = await fetch('', { method: 'POST', body: formData });
+                const result = await response.json();
+                
+                updateProgress(100);
+                
+                if (result.logs) {
+                    result.logs.forEach(msg => log(msg));
+                }
+                
+                if (result.success) {
+                    const pkg = result.package;
+                    document.getElementById('completionMessage').innerHTML = 
+                        '<div class="success" style="padding: 20px; background: #e8f5e9; border-radius: 4px;">' +
+                        '<h3>✓ Backup Package Created Successfully!</h3>' +
+                        '<p style="margin-top: 10px;"><strong>Package Location:</strong><br>' + pkg.directory + '</p>' +
+                        '<p style="margin-top: 10px;"><strong>Files Created:</strong></p>' +
+                        '<ul style="margin-left: 20px;">' +
+                        '<li>installer.php - Deployment script</li>' +
+                        '<li>backup.zip - WordPress files</li>' +
+                        '<li>database.sql - Database dump</li>' +
+                        '</ul>' +
+                        '<p style="margin-top: 10px;"><strong>Total Time:</strong> ' + pkg.duration + 's</p>' +
+                        '<div style="margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800;">' +
+                        '<strong>Next Steps:</strong><br>' +
+                        '1. Download the backup package from: <code>' + pkg.directory + '</code><br>' +
+                        '2. Upload to new host<br>' +
+                        '3. Edit installer.php configuration<br>' +
+                        '4. Visit installer.php in browser<br>' +
+                        '5. Delete installer.php after deployment' +
+                        '</div>' +
+                        '</div>';
+                } else {
+                    if (result.errors) {
+                        result.errors.forEach(msg => log(msg, 'error'));
+                    }
+                    document.getElementById('completionMessage').innerHTML = 
+                        '<div class="error" style="padding: 20px; background: #ffebee; border-radius: 4px;">' +
+                        '<h3>✗ Backup Failed</h3>' +
+                        '<p>Check the log above for error details.</p>' +
+                        '</div>';
+                }
+            } catch (error) {
+                updateProgress(0);
+                log('Network error: ' + error.message, 'error');
+                document.getElementById('completionMessage').innerHTML = 
+                    '<div class="error" style="padding: 20px; background: #ffebee; border-radius: 4px;">' +
+                    '<h3>✗ Connection Error</h3>' +
+                    '<p>' + error.message + '</p>' +
+                    '</div>';
+            }
+        }
+    </script>
+</body>
+</html>
+        <?php
     }
 }
+
+// Web UI execution
+$wuplicator = new Wuplicator();
+$wuplicator->run();
