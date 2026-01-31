@@ -1,33 +1,39 @@
 <?php
 /**
- * Wuplicator Backupper - Main Orchestrator
+ * Wuplicator Main Orchestrator
  * 
- * Coordinates all backup operations through modular components.
- * 
- * @package Wuplicator\Backupper
- * @version 1.2.0
+ * Coordinates backup creation workflow using modular components.
  */
 
 namespace Wuplicator\Backupper;
 
-use Wuplicator\Backupper\Core\{Config, Logger, Utils};
-use Wuplicator\Backupper\Database\{Backup as DatabaseBackup, Connection};
-use Wuplicator\Backupper\Files\{Scanner, Archiver, Validator};
+use Wuplicator\Backupper\Core\Logger;
+use Wuplicator\Backupper\Database\Parser;
+use Wuplicator\Backupper\Database\Connection;
+use Wuplicator\Backupper\Database\Exporter;
+use Wuplicator\Backupper\Database\Backup;
+use Wuplicator\Backupper\Files\Scanner;
+use Wuplicator\Backupper\Files\Archiver;
+use Wuplicator\Backupper\Files\Validator;
 use Wuplicator\Backupper\Generator\InstallerGenerator;
 use Wuplicator\Backupper\UI\WebInterface;
+use Exception;
 
 class Wuplicator {
     
     private $wpRoot;
     private $backupDir;
     private $logger;
+    private $errors = [];
     
     public function __construct($wpRoot = null) {
         $this->wpRoot = $wpRoot ?? dirname(__FILE__);
-        $this->backupDir = Config::getBackupDir($this->wpRoot);
+        $this->backupDir = $this->wpRoot . '/wuplicator-backups';
         $this->logger = new Logger();
         
-        Utils::ensureDirectory($this->backupDir);
+        if (!is_dir($this->backupDir)) {
+            mkdir($this->backupDir, 0755, true);
+        }
     }
     
     /**
@@ -38,63 +44,67 @@ class Wuplicator {
     public function createPackage() {
         $startTime = microtime(true);
         
-        // Check requirements
-        $missing = Config::checkRequirements();
-        if (!empty($missing)) {
-            throw new \Exception("Missing PHP extensions: " . implode(', ', $missing));
+        try {
+            // Create database backup
+            $parser = new Parser();
+            $connection = new Connection();
+            $exporter = new Exporter();
+            $dbBackup = new Backup($parser, $connection, $exporter, $this->logger);
+            
+            $sqlFile = $this->backupDir . '/database.sql';
+            $dbResult = $dbBackup->create($this->wpRoot, $sqlFile);
+            
+            // Create files backup
+            $scanner = new Scanner();
+            $archiver = new Archiver($this->logger);
+            $validator = new Validator($this->logger);
+            
+            $this->logger->log('Starting files backup...');
+            $this->logger->log('Scanning WordPress directory...');
+            $files = $scanner->scan($this->wpRoot, $this->wpRoot);
+            
+            $zipFile = $this->backupDir . '/backup.zip';
+            $filesResult = $archiver->create($files, $this->wpRoot, $zipFile);
+            
+            // Validate archive
+            if (!$validator->validate($zipFile)) {
+                throw new Exception("Archive validation failed");
+            }
+            
+            // Generate installer
+            $generator = new InstallerGenerator($this->logger);
+            $templatePath = dirname(__FILE__) . '/../installer.php';
+            $installerPath = $this->backupDir . '/installer.php';
+            
+            $metadata = [
+                'db_name' => $dbResult['config']['DB_NAME'],
+                'table_prefix' => $dbResult['config']['table_prefix'],
+                'site_url' => $connection->getSiteURL(
+                    $connection->connect($dbResult['config']),
+                    $dbResult['config']['table_prefix']
+                )
+            ];
+            
+            $generator->generate($templatePath, $installerPath, $metadata);
+            
+            $duration = round(microtime(true) - $startTime, 2);
+            
+            $this->logger->log('Backup package complete!');
+            $this->logger->log("Total time: {$duration}s");
+            $this->logger->log("Package location: {$this->backupDir}/");
+            
+            return [
+                'installer' => $installerPath,
+                'backup_zip' => $zipFile,
+                'database_sql' => $sqlFile,
+                'directory' => $this->backupDir,
+                'duration' => $duration
+            ];
+            
+        } catch (Exception $e) {
+            $this->errors[] = $e->getMessage();
+            throw $e;
         }
-        
-        // Create database backup
-        $sqlFile = $this->backupDir . '/database.sql';
-        $dbBackup = new DatabaseBackup($this->logger);
-        $dbMeta = $dbBackup->create($this->wpRoot, $sqlFile);
-        
-        // Create files backup
-        $zipFile = $this->backupDir . '/backup.zip';
-        $scanner = new Scanner();
-        $files = $scanner->scan($this->wpRoot, $this->wpRoot);
-        
-        $this->logger->log("Found " . count($files) . " files to archive");
-        
-        $archiver = new Archiver($this->logger);
-        $archiveMeta = $archiver->create($files, $this->wpRoot, $zipFile);
-        
-        // Validate archive
-        $validator = new Validator($this->logger);
-        if (!$validator->validate($zipFile)) {
-            throw new \Exception("Archive validation failed");
-        }
-        
-        $this->logger->log("Files backup created: " . Utils::formatBytes($archiveMeta['size']));
-        
-        // Generate installer
-        $installerFile = $this->backupDir . '/installer.php';
-        $connection = new Connection();
-        $pdo = $connection->connect($dbMeta['config']);
-        $siteUrl = $connection->getSiteURL($pdo, $dbMeta['config']['table_prefix']);
-        
-        $metadata = [
-            'db_name' => $dbMeta['config']['DB_NAME'],
-            'table_prefix' => $dbMeta['config']['table_prefix'],
-            'site_url' => $siteUrl
-        ];
-        
-        $generator = new InstallerGenerator($this->logger);
-        $generator->generate($this->wpRoot, $metadata, $installerFile);
-        
-        $duration = round(microtime(true) - $startTime, 2);
-        
-        $this->logger->log('Backup package complete!');
-        $this->logger->log("Total time: {$duration}s");
-        $this->logger->log("Package location: {$this->backupDir}/");
-        
-        return [
-            'installer' => $installerFile,
-            'backup_zip' => $zipFile,
-            'database_sql' => $sqlFile,
-            'directory' => $this->backupDir,
-            'duration' => $duration
-        ];
     }
     
     /**
@@ -114,7 +124,7 @@ class Wuplicator {
                         'logs' => $this->logger->getLogs(),
                         'package' => $package
                     ]);
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     header('Content-Type: application/json');
                     echo json_encode([
                         'success' => false,
@@ -134,21 +144,23 @@ class Wuplicator {
      */
     private function renderUI() {
         try {
-            $dbBackup = new DatabaseBackup($this->logger);
-            $wpConfigPath = rtrim($this->wpRoot, '/') . '/wp-config.php';
-            $parser = new \Wuplicator\Backupper\Database\Parser();
-            $config = $parser->parse($wpConfigPath);
-            
+            $parser = new Parser();
+            $config = $parser->parse($this->wpRoot . '/wp-config.php');
             $connection = new Connection();
-            $pdo = $connection->connect($config);
-            $siteUrl = $connection->getSiteURL($pdo, $config['table_prefix']);
             
             $siteInfo = [
                 'db_name' => $config['DB_NAME'],
                 'table_prefix' => $config['table_prefix'],
-                'site_url' => $siteUrl
+                'site_url' => 'Unknown'
             ];
-        } catch (\Exception $e) {
+            
+            try {
+                $pdo = $connection->connect($config);
+                $siteInfo['site_url'] = $connection->getSiteURL($pdo, $config['table_prefix']);
+            } catch (Exception $e) {
+                // Site URL remains Unknown
+            }
+        } catch (Exception $e) {
             $siteInfo = [
                 'db_name' => 'Unknown',
                 'table_prefix' => 'Unknown',

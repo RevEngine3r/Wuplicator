@@ -1,17 +1,14 @@
 <?php
 /**
- * Wuplicator Backupper - Archive Validator Module
+ * Archive Validator
  * 
  * Validates ZIP archive integrity.
- * 
- * @package Wuplicator\Backupper\Files
- * @version 1.2.0
  */
 
 namespace Wuplicator\Backupper\Files;
 
 use Wuplicator\Backupper\Core\Logger;
-use \ZipArchive;
+use ZipArchive;
 
 class Validator {
     
@@ -32,21 +29,16 @@ class Validator {
         
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CHECKCONS) !== true) {
-            $this->logger->error('Archive integrity check failed');
+            $this->logger->log('Integrity check: FAILED');
             return false;
         }
         
         $numFiles = $zip->numFiles;
         $zip->close();
         
-        if ($numFiles === 0) {
-            $this->logger->error('Archive is empty');
-            return false;
-        }
-        
         $this->logger->log("Archive contains {$numFiles} files");
         $this->logger->log("Integrity check: PASSED");
         
-        return true;
+        return $numFiles > 0;
     }
 }

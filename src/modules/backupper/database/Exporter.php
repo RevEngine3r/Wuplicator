@@ -1,17 +1,13 @@
 <?php
 /**
- * Wuplicator Backupper - Database Exporter Module
+ * Database Table Exporter
  * 
  * Exports MySQL table structures and data to SQL format.
- * 
- * @package Wuplicator\Backupper\Database
- * @version 1.2.0
  */
 
 namespace Wuplicator\Backupper\Database;
 
-use \PDO;
-use Wuplicator\Backupper\Core\Config;
+use PDO;
 
 class Exporter {
     
@@ -41,8 +37,7 @@ class Exporter {
      * @param int $chunkSize Rows per INSERT statement
      * @return string SQL INSERT statements
      */
-    public function exportData($pdo, $tableName, $chunkSize = null) {
-        $chunkSize = $chunkSize ?? Config::DB_CHUNK_SIZE;
+    public function exportData($pdo, $tableName, $chunkSize = 1000) {
         $sql = "";
         
         // Get total rows

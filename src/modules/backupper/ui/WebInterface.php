@@ -1,11 +1,8 @@
 <?php
 /**
- * Wuplicator Backupper - Web Interface Module
+ * Web Interface for Backup Creation
  * 
- * Renders the HTML/CSS/JavaScript user interface.
- * 
- * @package Wuplicator\Backupper\UI
- * @version 1.2.0
+ * Renders HTML UI and handles AJAX requests.
  */
 
 namespace Wuplicator\Backupper\UI;
@@ -19,9 +16,10 @@ class WebInterface {
     }
     
     /**
-     * Render complete web UI
+     * Render web UI
      */
     public function render() {
+        $siteInfo = $this->siteInfo;
         ?>
 <!DOCTYPE html>
 <html>
@@ -56,7 +54,7 @@ class WebInterface {
     <div class="container">
         <div class="header">
             <h1>💾 Wuplicator Backup Creator</h1>
-            <div class="subtitle">WordPress Complete Backup Tool v1.2.0</div>
+            <div class="subtitle">WordPress Complete Backup Tool</div>
         </div>
         <div class="content">
             <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
@@ -65,9 +63,9 @@ class WebInterface {
                 <h2>Ready to Create Backup</h2>
                 <div class="info">
                     <strong>Current Site Info:</strong><br>
-                    Database: <?php echo htmlspecialchars($this->siteInfo['db_name']); ?><br>
-                    Table Prefix: <?php echo htmlspecialchars($this->siteInfo['table_prefix']); ?><br>
-                    Site URL: <?php echo htmlspecialchars($this->siteInfo['site_url']); ?>
+                    Database: <?php echo htmlspecialchars($siteInfo['db_name']); ?><br>
+                    Table Prefix: <?php echo htmlspecialchars($siteInfo['table_prefix']); ?><br>
+                    Site URL: <?php echo htmlspecialchars($siteInfo['site_url']); ?>
                 </div>
                 <p>This will create a complete backup package containing:</p>
                 <ul style="margin: 15px 0 15px 30px;">
@@ -144,6 +142,14 @@ class WebInterface {
                         '<li>database.sql - Database dump</li>' +
                         '</ul>' +
                         '<p style="margin-top: 10px;"><strong>Total Time:</strong> ' + pkg.duration + 's</p>' +
+                        '<div style="margin-top: 20px; padding: 15px; background: #fff3e0; border-left: 4px solid #ff9800;">' +
+                        '<strong>Next Steps:</strong><br>' +
+                        '1. Download the backup package from: <code>' + pkg.directory + '</code><br>' +
+                        '2. Upload to new host<br>' +
+                        '3. Edit installer.php configuration<br>' +
+                        '4. Visit installer.php in browser<br>' +
+                        '5. Delete installer.php after deployment' +
+                        '</div>' +
                         '</div>';
                 } else {
                     if (result.errors) {
@@ -158,6 +164,11 @@ class WebInterface {
             } catch (error) {
                 updateProgress(0);
                 log('Network error: ' + error.message, 'error');
+                document.getElementById('completionMessage').innerHTML = 
+                    '<div class="error" style="padding: 20px; background: #ffebee; border-radius: 4px;">' +
+                    '<h3>✗ Connection Error</h3>' +
+                    '<p>' + error.message + '</p>' +
+                    '</div>';
             }
         }
     </script>

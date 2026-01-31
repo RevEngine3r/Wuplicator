@@ -1,18 +1,15 @@
 <?php
 /**
- * Wuplicator Backupper - ZIP Archiver Module
+ * ZIP Archive Creator
  * 
- * Creates ZIP archives from file lists.
- * 
- * @package Wuplicator\Backupper\Files
- * @version 1.2.0
+ * Creates ZIP archives with progress tracking.
  */
 
 namespace Wuplicator\Backupper\Files;
 
 use Wuplicator\Backupper\Core\Logger;
-use Wuplicator\Backupper\Core\Config;
-use \ZipArchive;
+use ZipArchive;
+use Exception;
 
 class Archiver {
     
@@ -23,29 +20,39 @@ class Archiver {
     }
     
     /**
-     * Create ZIP archive from file list
+     * Create ZIP archive of files
      * 
-     * @param array $files File paths relative to WordPress root
+     * @param array $files File paths relative to root
      * @param string $wpRoot WordPress root directory
      * @param string $outputFile Output ZIP file path
      * @return array Archive metadata
-     * @throws \Exception If archive creation fails
+     * @throws Exception If archive creation fails
      */
     public function create($files, $wpRoot, $outputFile) {
+        // Check ZipArchive extension
+        if (!class_exists('ZipArchive')) {
+            throw new Exception("ZipArchive extension not available. Install php-zip.");
+        }
+        
         $fileCount = count($files);
         $this->logger->log("Creating ZIP archive with {$fileCount} files...");
         
-        $zip = new ZipArchive();
-        if ($zip->open($outputFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new \Exception("Failed to create ZIP archive: {$outputFile}");
+        if ($fileCount === 0) {
+            throw new Exception("No files found to backup");
         }
         
-        // Add files to archive with progress tracking
+        // Create ZIP archive
+        $zip = new ZipArchive();
+        if ($zip->open($outputFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new Exception("Failed to create ZIP archive: {$outputFile}");
+        }
+        
+        // Add files to archive
         $processed = 0;
         $lastProgress = 0;
         
         foreach ($files as $file) {
-            $fullPath = rtrim($wpRoot, '/') . '/' . $file;
+            $fullPath = $wpRoot . '/' . $file;
             
             // Skip if file no longer exists or is not readable
             if (!file_exists($fullPath) || !is_readable($fullPath)) {
@@ -57,7 +64,7 @@ class Archiver {
             
             // Progress feedback every 10%
             $progress = floor(($processed / $fileCount) * 100);
-            if ($progress >= $lastProgress + Config::PROGRESS_INTERVAL) {
+            if ($progress >= $lastProgress + 10) {
                 $this->logger->log("Progress: {$progress}% ({$processed}/{$fileCount} files)");
                 $lastProgress = $progress;
             }
@@ -65,10 +72,23 @@ class Archiver {
         
         $zip->close();
         
+        $fileSize = filesize($outputFile);
+        $this->logger->log("Files backup created: " . $this->formatBytes($fileSize));
+        $this->logger->log("Files archived: {$processed}");
+        
         return [
             'file' => $outputFile,
-            'files_added' => $processed,
-            'size' => filesize($outputFile)
+            'size' => $fileSize,
+            'files' => $processed
         ];
+    }
+    
+    private function formatBytes($bytes) {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $bytes = max($bytes, 0);
+        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
+        $pow = min($pow, count($units) - 1);
+        $bytes /= (1 << (10 * $pow));
+        return round($bytes, 2) . ' ' . $units[$pow];
     }
 }

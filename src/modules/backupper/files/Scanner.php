@@ -1,32 +1,42 @@
 <?php
 /**
- * Wuplicator Backupper - Directory Scanner Module
+ * File System Scanner
  * 
- * Scans WordPress directory structure with exclusion support.
- * 
- * @package Wuplicator\Backupper\Files
- * @version 1.2.0
+ * Recursively scans WordPress directory with exclusion support.
  */
 
 namespace Wuplicator\Backupper\Files;
 
-use Wuplicator\Backupper\Core\Config;
-use \RecursiveDirectoryIterator;
-use \RecursiveIteratorIterator;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
 
 class Scanner {
+    
+    private $defaultExcludes = [
+        'wuplicator-backups',
+        'wp-content/cache',
+        'wp-content/backup',
+        'wp-content/backups',
+        'wp-content/uploads/backup',
+        '.git',
+        '.svn',
+        'node_modules',
+        '.DS_Store',
+        'error_log',
+        'debug.log'
+    ];
     
     /**
      * Scan directory recursively
      * 
      * @param string $path Directory path
-     * @param string $wpRoot WordPress root for relative paths
+     * @param string $wpRoot WordPress root directory
      * @param array $customExcludes Custom exclusion patterns
      * @return array File paths relative to WordPress root
      */
     public function scan($path, $wpRoot, $customExcludes = []) {
         $files = [];
-        $excludes = array_merge(Config::$defaultExcludes, $customExcludes);
+        $excludes = array_merge($this->defaultExcludes, $customExcludes);
         
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -47,7 +57,7 @@ class Scanner {
                 continue;
             }
             
-            // Add files only (directories created implicitly in ZIP)
+            // Add files only (directories are created implicitly in ZIP)
             if ($item->isFile()) {
                 $files[] = $relativePath;
             }
@@ -57,11 +67,11 @@ class Scanner {
     }
     
     /**
-     * Check if file path matches exclusion patterns
+     * Check if file matches exclusion patterns
      * 
-     * @param string $relativePath Relative file path
+     * @param string $relativePath File path relative to root
      * @param array $excludes Exclusion patterns
-     * @return bool True if file should be excluded
+     * @return bool True if excluded
      */
     private function isExcluded($relativePath, $excludes) {
         foreach ($excludes as $pattern) {
@@ -72,7 +82,7 @@ class Scanner {
             
             // Wildcard pattern (*.log, *.tmp)
             if (strpos($pattern, '*') !== false) {
-                $regex = '/^' . str_replace('\*', '.*', preg_quote($pattern, '/')) . '$/';
+                $regex = '/^' . str_replace('\\*', '.*', preg_quote($pattern, '/')) . '$/';
                 if (preg_match($regex, basename($relativePath))) {
                     return true;
                 }
