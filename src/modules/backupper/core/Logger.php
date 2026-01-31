@@ -1,8 +1,8 @@
 <?php
 /**
- * Wuplicator Backupper - Logger
+ * Wuplicator Backupper - Logger Module
  * 
- * Logging system for tracking operations and errors.
+ * Centralized logging system for tracking backup operations.
  * 
  * @package Wuplicator\Backupper\Core
  * @version 1.2.0
@@ -11,88 +11,75 @@
 namespace Wuplicator\Backupper\Core;
 
 class Logger {
-    /**
-     * @var array Log messages
-     */
+    
+    /** @var array Log messages */
     private $logs = [];
     
-    /**
-     * @var array Error messages
-     */
+    /** @var array Error messages */
     private $errors = [];
     
-    /**
-     * @var bool Enable console output
-     */
-    private $consoleOutput = false;
+    /** @var float Start time for performance tracking */
+    private $startTime;
     
-    /**
-     * Constructor
-     */
-    public function __construct(bool $consoleOutput = false) {
-        $this->consoleOutput = $consoleOutput;
+    public function __construct() {
+        $this->startTime = microtime(true);
     }
     
     /**
-     * Log an info message
+     * Log information message
+     * 
+     * @param string $message Log message
      */
-    public function log(string $message): void {
-        $timestamp = date('Y-m-d H:i:s');
-        $entry = "[{$timestamp}] {$message}";
-        $this->logs[] = $entry;
-        
-        if ($this->consoleOutput) {
-            echo $entry . "\n";
-        }
+    public function log($message) {
+        $timestamp = date('H:i:s');
+        $elapsed = round(microtime(true) - $this->startTime, 2);
+        $this->logs[] = "[{$timestamp}] [{$elapsed}s] {$message}";
     }
     
     /**
-     * Log an error message
+     * Log error message
+     * 
+     * @param string $message Error message
      */
-    public function error(string $message): void {
-        $timestamp = date('Y-m-d H:i:s');
-        $entry = "[{$timestamp}] ERROR: {$message}";
-        $this->errors[] = $entry;
-        $this->logs[] = $entry;
-        
-        if ($this->consoleOutput) {
-            echo $entry . "\n";
-        }
+    public function error($message) {
+        $timestamp = date('H:i:s');
+        $this->errors[] = "[{$timestamp}] ERROR: {$message}";
+        $this->log("ERROR: {$message}");
     }
     
     /**
-     * Get all logs
+     * Get all log messages
+     * 
+     * @return array Log messages
      */
-    public function getLogs(): array {
+    public function getLogs() {
         return $this->logs;
     }
     
     /**
-     * Get all errors
+     * Get all error messages
+     * 
+     * @return array Error messages
      */
-    public function getErrors(): array {
+    public function getErrors() {
         return $this->errors;
     }
     
     /**
-     * Check if there are errors
+     * Check if any errors occurred
+     * 
+     * @return bool True if errors exist
      */
-    public function hasErrors(): bool {
+    public function hasErrors() {
         return !empty($this->errors);
     }
     
     /**
-     * Clear all logs
+     * Get elapsed time since logger creation
+     * 
+     * @return float Elapsed time in seconds
      */
-    public function clear(): void {
-        $this->logs = [];
-        $this->errors = [];
-    }
-    
-    /**
-     * Get logs as formatted string
-     */
-    public function toString(): string {
-        return implode("\n", $this->logs);
+    public function getElapsedTime() {
+        return round(microtime(true) - $this->startTime, 2);
     }
 }

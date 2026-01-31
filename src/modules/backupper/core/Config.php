@@ -1,8 +1,8 @@
 <?php
 /**
- * Wuplicator Backupper - Configuration
+ * Wuplicator Backupper - Configuration Module
  * 
- * Central configuration management for the backupper module.
+ * Centralized configuration and constants for the backupper.
  * 
  * @package Wuplicator\Backupper\Core
  * @version 1.2.0
@@ -11,36 +11,12 @@
 namespace Wuplicator\Backupper\Core;
 
 class Config {
-    /**
-     * Application version
-     */
+    
+    /** @var string Backupper version */
     const VERSION = '1.2.0';
     
-    /**
-     * Module name
-     */
-    const MODULE_NAME = 'Wuplicator Backupper';
-    
-    /**
-     * Default backup directory name
-     */
-    const BACKUP_DIR = 'wuplicator-backups';
-    
-    /**
-     * Default file permissions
-     */
-    const DIR_PERMISSIONS = 0755;
-    const FILE_PERMISSIONS = 0644;
-    
-    /**
-     * Database export chunk size (rows per INSERT)
-     */
-    const DB_CHUNK_SIZE = 1000;
-    
-    /**
-     * Default exclusion patterns
-     */
-    const DEFAULT_EXCLUDES = [
+    /** @var array Default exclusion patterns */
+    public static $defaultExcludes = [
         'wuplicator-backups',
         'wp-content/cache',
         'wp-content/backup',
@@ -51,27 +27,49 @@ class Config {
         'node_modules',
         '.DS_Store',
         'error_log',
-        'debug.log',
-        '*.tmp',
-        '*.log'
+        'debug.log'
+    ];
+    
+    /** @var int Database export chunk size (rows per INSERT) */
+    const DB_CHUNK_SIZE = 1000;
+    
+    /** @var int Progress update interval (percent) */
+    const PROGRESS_INTERVAL = 10;
+    
+    /** @var string Backup directory name */
+    const BACKUP_DIR_NAME = 'wuplicator-backups';
+    
+    /** @var array Required PHP extensions */
+    public static $requiredExtensions = [
+        'pdo',
+        'pdo_mysql',
+        'zip'
     ];
     
     /**
-     * Progress reporting interval (percentage)
+     * Check if all required PHP extensions are available
+     * 
+     * @return array Missing extensions (empty if all available)
      */
-    const PROGRESS_INTERVAL = 10;
-    
-    /**
-     * Get default excludes
-     */
-    public static function getDefaultExcludes(): array {
-        return self::DEFAULT_EXCLUDES;
+    public static function checkRequirements() {
+        $missing = [];
+        
+        foreach (self::$requiredExtensions as $ext) {
+            if (!extension_loaded($ext)) {
+                $missing[] = $ext;
+            }
+        }
+        
+        return $missing;
     }
     
     /**
-     * Get version string
+     * Get backup directory path
+     * 
+     * @param string $wpRoot WordPress root directory
+     * @return string Backup directory path
      */
-    public static function getVersion(): string {
-        return self::VERSION;
+    public static function getBackupDir($wpRoot) {
+        return rtrim($wpRoot, '/') . '/' . self::BACKUP_DIR_NAME;
     }
 }

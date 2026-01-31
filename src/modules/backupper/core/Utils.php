@@ -1,8 +1,8 @@
 <?php
 /**
- * Wuplicator Backupper - Utilities
+ * Wuplicator Backupper - Utilities Module
  * 
- * Common utility functions.
+ * Common utility functions used across the backupper.
  * 
  * @package Wuplicator\Backupper\Core
  * @version 1.2.0
@@ -11,10 +11,14 @@
 namespace Wuplicator\Backupper\Core;
 
 class Utils {
+    
     /**
      * Format bytes to human-readable size
+     * 
+     * @param int $bytes Bytes
+     * @return string Formatted size (e.g., "15.2 MB")
      */
-    public static function formatBytes(int $bytes): string {
+    public static function formatBytes($bytes) {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $bytes = max($bytes, 0);
         $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
@@ -24,55 +28,51 @@ class Utils {
     }
     
     /**
-     * Generate cryptographically secure token
+     * Generate a secure random token
+     * 
+     * @param int $length Token length in bytes
+     * @return string Hexadecimal token
      */
-    public static function generateToken(int $length = 32): string {
+    public static function generateToken($length = 32) {
         return bin2hex(random_bytes($length));
     }
     
     /**
-     * Sanitize file path
+     * Ensure directory exists and is writable
+     * 
+     * @param string $dir Directory path
+     * @return bool True on success
+     * @throws \Exception If directory cannot be created or is not writable
      */
-    public static function sanitizePath(string $path): string {
-        // Normalize separators
-        $path = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $path);
-        
-        // Remove double separators
-        $path = preg_replace('#' . preg_quote(DIRECTORY_SEPARATOR, '#') . '+#', DIRECTORY_SEPARATOR, $path);
-        
-        // Remove trailing separator
-        return rtrim($path, DIRECTORY_SEPARATOR);
-    }
-    
-    /**
-     * Validate path exists and is readable
-     */
-    public static function validatePath(string $path): bool {
-        return file_exists($path) && is_readable($path);
-    }
-    
-    /**
-     * Get relative path from base
-     */
-    public static function getRelativePath(string $from, string $to): string {
-        $from = self::sanitizePath($from);
-        $to = self::sanitizePath($to);
-        
-        if (str_starts_with($to, $from)) {
-            return substr($to, strlen($from) + 1);
+    public static function ensureDirectory($dir) {
+        if (!is_dir($dir)) {
+            if (!mkdir($dir, 0755, true)) {
+                throw new \Exception("Failed to create directory: {$dir}");
+            }
         }
         
-        return $to;
+        if (!is_writable($dir)) {
+            throw new \Exception("Directory not writable: {$dir}");
+        }
+        
+        return true;
     }
     
     /**
-     * Ensure directory exists
+     * Get current timestamp in standard format
+     * 
+     * @return string Formatted timestamp (YYYY-MM-DD HH:MM:SS)
      */
-    public static function ensureDirectory(string $path, int $permissions = 0755): bool {
-        if (is_dir($path)) {
-            return true;
-        }
-        
-        return mkdir($path, $permissions, true);
+    public static function timestamp() {
+        return date('Y-m-d H:i:s');
+    }
+    
+    /**
+     * Get filename-safe timestamp
+     * 
+     * @return string Filename-safe timestamp (YYYY-MM-DD_HH-MM-SS)
+     */
+    public static function filenameTimestamp() {
+        return date('Y-m-d_H-i-s');
     }
 }
