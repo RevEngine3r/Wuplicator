@@ -1,8 +1,6 @@
 <?php
 /**
- * Wuplicator Installer - Logger
- * 
- * Logging system for tracking operations and errors.
+ * Wuplicator Installer - Logger Module
  * 
  * @package Wuplicator\Installer\Core
  * @version 1.2.0
@@ -11,53 +9,28 @@
 namespace Wuplicator\Installer\Core;
 
 class Logger {
+    
     private $logs = [];
     private $errors = [];
-    private $consoleOutput = false;
     
-    public function __construct(bool $consoleOutput = false) {
-        $this->consoleOutput = $consoleOutput;
+    public function log($message) {
+        $this->logs[] = $message;
     }
     
-    public function log(string $message): void {
-        $timestamp = date('Y-m-d H:i:s');
-        $entry = "[{$timestamp}] {$message}";
-        $this->logs[] = $entry;
-        
-        if ($this->consoleOutput) {
-            echo $entry . "\n";
-        }
+    public function error($message) {
+        $this->errors[] = $message;
+        $this->log("ERROR: {$message}");
     }
     
-    public function error(string $message): void {
-        $timestamp = date('Y-m-d H:i:s');
-        $entry = "[{$timestamp}] ERROR: {$message}";
-        $this->errors[] = $entry;
-        $this->logs[] = $entry;
-        
-        if ($this->consoleOutput) {
-            echo $entry . "\n";
-        }
-    }
-    
-    public function getLogs(): array {
+    public function getLogs() {
         return $this->logs;
     }
     
-    public function getErrors(): array {
+    public function getErrors() {
         return $this->errors;
     }
     
-    public function hasErrors(): bool {
+    public function hasErrors() {
         return !empty($this->errors);
-    }
-    
-    public function clear(): void {
-        $this->logs = [];
-        $this->errors = [];
-    }
-    
-    public function toString(): string {
-        return implode("\n", $this->logs);
     }
 }
