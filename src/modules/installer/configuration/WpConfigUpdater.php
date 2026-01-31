@@ -1,16 +1,14 @@
 <?php
 /**
- * Wuplicator Installer - wp-config.php Updater Module
+ * wp-config.php Updater
  * 
- * Updates wp-config.php database settings.
- * 
- * @package Wuplicator\Installer\Configuration
- * @version 1.2.0
+ * Updates WordPress configuration file with new database credentials.
  */
 
 namespace Wuplicator\Installer\Configuration;
 
 use Wuplicator\Installer\Core\Logger;
+use Exception;
 
 class WpConfigUpdater {
     
@@ -21,47 +19,31 @@ class WpConfigUpdater {
     }
     
     /**
-     * Update wp-config.php database settings
+     * Update wp-config.php with new database settings
      * 
      * @param string $wpConfigPath Path to wp-config.php
      * @param array $config New database configuration
-     * @return bool Success
+     * @throws Exception If update fails
      */
     public function update($wpConfigPath, $config) {
         if (!file_exists($wpConfigPath)) {
-            $this->logger->error('wp-config.php not found');
-            return false;
+            throw new Exception('wp-config.php not found');
         }
+        
+        $this->logger->log('Updating wp-config.php...');
         
         $content = file_get_contents($wpConfigPath);
         
-        $content = preg_replace(
-            "/define\s*\(\s*'DB_NAME'\s*,\s*'[^']*'\s*\)/",
-            "define('DB_NAME', '{$config['name']}')",
-            $content
-        );
-        $content = preg_replace(
-            "/define\s*\(\s*'DB_USER'\s*,\s*'[^']*'\s*\)/",
-            "define('DB_USER', '{$config['user']}')",
-            $content
-        );
-        $content = preg_replace(
-            "/define\s*\(\s*'DB_PASSWORD'\s*,\s*'[^']*'\s*\)/",
-            "define('DB_PASSWORD', '{$config['password']}')",
-            $content
-        );
-        $content = preg_replace(
-            "/define\s*\(\s*'DB_HOST'\s*,\s*'[^']*'\s*\)/",
-            "define('DB_HOST', '{$config['host']}')",
-            $content
-        );
+        // Replace database constants
+        $content = preg_replace("/define\\s*\\(\\s*'DB_NAME'\\s*,\\s*'[^']*'\\s*\\)/", "define('DB_NAME', '{$config['DB_NAME']}')", $content);
+        $content = preg_replace("/define\\s*\\(\\s*'DB_USER'\\s*,\\s*'[^']*'\\s*\\)/", "define('DB_USER', '{$config['DB_USER']}')", $content);
+        $content = preg_replace("/define\\s*\\(\\s*'DB_PASSWORD'\\s*,\\s*'[^']*'\\s*\\)/", "define('DB_PASSWORD', '{$config['DB_PASSWORD']}')", $content);
+        $content = preg_replace("/define\\s*\\(\\s*'DB_HOST'\\s*,\\s*'[^']*'\\s*\\)/", "define('DB_HOST', '{$config['DB_HOST']}')", $content);
         
-        if (file_put_contents($wpConfigPath, $content) !== false) {
-            $this->logger->log('wp-config.php database settings updated');
-            return true;
+        if (file_put_contents($wpConfigPath, $content) === false) {
+            throw new Exception('Failed to write wp-config.php');
         }
         
-        $this->logger->error('Failed to update wp-config.php');
-        return false;
+        $this->logger->log('wp-config.php database settings updated');
     }
 }

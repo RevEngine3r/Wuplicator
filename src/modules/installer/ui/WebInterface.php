@@ -1,9 +1,8 @@
 <?php
 /**
- * Wuplicator Installer - Web Interface Module
+ * Web Interface for Installation
  * 
- * @package Wuplicator\Installer\UI
- * @version 1.2.0
+ * Renders HTML UI and handles installation workflow.
  */
 
 namespace Wuplicator\Installer\UI;
@@ -16,7 +15,11 @@ class WebInterface {
         $this->metadata = $metadata;
     }
     
+    /**
+     * Render installation UI
+     */
     public function render() {
+        $metadata = $this->metadata;
         ?>
 <!DOCTYPE html>
 <html>
@@ -50,7 +53,7 @@ class WebInterface {
     <div class="container">
         <div class="header">
             <h1>🚀 Wuplicator Installer</h1>
-            <div class="subtitle">WordPress Backup Deployment Tool v1.2.0</div>
+            <div class="subtitle">WordPress Backup Deployment Tool v1.1.0</div>
         </div>
         <div class="content">
             <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
@@ -59,9 +62,9 @@ class WebInterface {
                 <h2>Step 1: Ready to Install</h2>
                 <div class="info">
                     <strong>Backup Info:</strong><br>
-                    Created: <?php echo htmlspecialchars($this->metadata['created']); ?><br>
-                    Original Database: <?php echo htmlspecialchars($this->metadata['db_name']); ?><br>
-                    Original URL: <?php echo htmlspecialchars($this->metadata['site_url']); ?>
+                    Created: <?php echo htmlspecialchars($metadata['created']); ?><br>
+                    Original Database: <?php echo htmlspecialchars($metadata['db_name']); ?><br>
+                    Original URL: <?php echo htmlspecialchars($metadata['site_url']); ?>
                 </div>
                 <p>Click Start to begin the installation process.</p>
                 <br>
@@ -106,7 +109,9 @@ class WebInterface {
             const result = await response.json();
             
             result.logs.forEach(msg => log(msg));
-            result.errors.forEach(msg => log(msg, 'error'));
+            if (result.errors) {
+                result.errors.forEach(msg => log(msg, 'error'));
+            }
             
             return result.success;
         }

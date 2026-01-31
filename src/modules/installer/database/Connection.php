@@ -1,53 +1,62 @@
 <?php
 /**
- * Wuplicator Installer - Database Connection Module
+ * Database Connection Manager
  * 
- * @package Wuplicator\Installer\Database
- * @version 1.2.0
+ * Manages MySQL database connections and operations.
  */
 
 namespace Wuplicator\Installer\Database;
 
-use Wuplicator\Installer\Core\Logger;
-use \PDO;
-use \PDOException;
+use PDO;
+use PDOException;
+use Exception;
 
 class Connection {
     
-    private $logger;
-    
-    public function __construct(Logger $logger) {
-        $this->logger = $logger;
-    }
-    
     /**
-     * Connect to database and create if not exists
+     * Create database connection
      * 
-     * @param array $config Database configuration
-     * @return PDO|null Database connection or null on failure
+     * @param string $host Database host
+     * @param string $dbName Database name (optional for initial connection)
+     * @param string $user Database user
+     * @param string $password Database password
+     * @return PDO Database connection
+     * @throws Exception If connection fails
      */
-    public function connect($config) {
+    public function connect($host, $dbName, $user, $password) {
         try {
-            // Connect without database
-            $pdo = new PDO(
-                "mysql:host={$config['host']}",
-                $config['user'],
-                $config['password']
-            );
+            if (empty($dbName)) {
+                $dsn = "mysql:host={$host}";
+            } else {
+                $dsn = "mysql:host={$host};dbname={$dbName}";
+            }
+            
+            $pdo = new PDO($dsn, $user, $password);
             $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            
-            // Create database
-            $dbName = $config['name'];
-            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $this->logger->log("Database '{$dbName}' created");
-            
-            // Select database
-            $pdo->exec("USE `{$dbName}`");
             
             return $pdo;
         } catch (PDOException $e) {
-            $this->logger->error('Database error: ' . $e->getMessage());
-            return null;
+            throw new Exception("Database connection failed: " . $e->getMessage());
         }
+    }
+    
+    /**
+     * Create database if not exists
+     * 
+     * @param PDO $pdo Database connection
+     * @param string $dbName Database name
+     */
+    public function createDatabase($pdo, $dbName) {
+        $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    }
+    
+    /**
+     * Use specific database
+     * 
+     * @param PDO $pdo Database connection
+     * @param string $dbName Database name
+     */
+    public function useDatabase($pdo, $dbName) {
+        $pdo->exec("USE `{$dbName}`");
     }
 }

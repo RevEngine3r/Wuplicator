@@ -1,17 +1,15 @@
 <?php
 /**
- * Wuplicator Installer - Backup Extractor Module
+ * Archive Extractor
  * 
- * Extracts ZIP archives.
- * 
- * @package Wuplicator\Installer\Extraction
- * @version 1.2.0
+ * Extracts ZIP archives with validation.
  */
 
 namespace Wuplicator\Installer\Extraction;
 
 use Wuplicator\Installer\Core\Logger;
-use \ZipArchive;
+use ZipArchive;
+use Exception;
 
 class Extractor {
     
@@ -24,39 +22,37 @@ class Extractor {
     /**
      * Extract backup archive
      * 
-     * @param string $workDir Working directory
-     * @return bool Success
+     * @param string $zipFile Path to ZIP file
+     * @param string $destination Extraction destination
+     * @return int Number of files extracted
+     * @throws Exception If extraction fails
      */
-    public function extract($workDir) {
+    public function extract($zipFile, $destination) {
         $this->logger->log('Extracting backup archive...');
         
-        $zipFile = rtrim($workDir, '/') . '/backup.zip';
         if (!file_exists($zipFile)) {
-            $this->logger->error('Backup file not found');
-            return false;
+            throw new Exception('Backup file not found');
         }
         
         if (!class_exists('ZipArchive')) {
-            $this->logger->error('ZipArchive extension not available');
-            return false;
+            throw new Exception('ZipArchive extension not available');
         }
         
         $zip = new ZipArchive();
         if ($zip->open($zipFile) !== true) {
-            $this->logger->error('Failed to open backup archive');
-            return false;
+            throw new Exception('Failed to open backup archive');
         }
         
-        $extracted = $zip->extractTo($workDir);
         $numFiles = $zip->numFiles;
+        $extracted = $zip->extractTo($destination);
         $zip->close();
         
         if (!$extracted) {
-            $this->logger->error('Failed to extract files');
-            return false;
+            throw new Exception('Failed to extract files');
         }
         
         $this->logger->log("Extracted {$numFiles} files successfully");
-        return true;
+        
+        return $numFiles;
     }
 }

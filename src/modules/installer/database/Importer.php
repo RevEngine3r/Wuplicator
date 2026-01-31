@@ -1,15 +1,15 @@
 <?php
 /**
- * Wuplicator Installer - SQL Importer Module
+ * SQL Importer
  * 
- * @package Wuplicator\Installer\Database
- * @version 1.2.0
+ * Imports SQL files into MySQL database.
  */
 
 namespace Wuplicator\Installer\Database;
 
 use Wuplicator\Installer\Core\Logger;
-use \PDO;
+use PDO;
+use Exception;
 
 class Importer {
     
@@ -20,39 +20,38 @@ class Importer {
     }
     
     /**
-     * Import SQL file into database
+     * Import SQL file
      * 
      * @param PDO $pdo Database connection
-     * @param string $sqlFile SQL file path
-     * @return bool Success
+     * @param string $sqlFile Path to SQL file
+     * @throws Exception If import fails
      */
     public function import($pdo, $sqlFile) {
         if (!file_exists($sqlFile)) {
-            $this->logger->error('SQL file not found');
-            return false;
+            throw new Exception('SQL backup file not found');
         }
         
         $this->logger->log('Importing database...');
         
+        $sql = file_get_contents($sqlFile);
+        
+        // Execute SQL (handle multi-statement execution)
         try {
-            $sql = file_get_contents($sqlFile);
             $pdo->exec($sql);
             $this->logger->log('Database imported successfully');
-            return true;
-        } catch (\Exception $e) {
-            $this->logger->error('Import failed: ' . $e->getMessage());
-            return false;
+        } catch (Exception $e) {
+            throw new Exception('Database import failed: ' . $e->getMessage());
         }
     }
     
     /**
      * Find SQL file in directory
      * 
-     * @param string $workDir Working directory
+     * @param string $directory Directory to search
      * @return string|null SQL file path or null
      */
-    public function findSQLFile($workDir) {
-        $files = glob(rtrim($workDir, '/') . '/*.sql');
+    public function findSQLFile($directory) {
+        $files = glob($directory . '/*.sql');
         return !empty($files) ? $files[0] : null;
     }
 }

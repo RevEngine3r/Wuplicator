@@ -1,16 +1,14 @@
 <?php
 /**
- * Wuplicator Installer - Security Keys Module
+ * WordPress Security Keys Regenerator
  * 
- * Regenerates WordPress security keys in wp-config.php.
- * 
- * @package Wuplicator\Installer\Configuration
- * @version 1.2.0
+ * Regenerates all 8 WordPress security keys for enhanced security.
  */
 
 namespace Wuplicator\Installer\Configuration;
 
 use Wuplicator\Installer\Core\Logger;
+use Exception;
 
 class SecurityKeys {
     
@@ -21,21 +19,21 @@ class SecurityKeys {
     }
     
     /**
-     * Regenerate all WordPress security keys
+     * Regenerate WordPress security keys in wp-config.php
      * 
      * @param string $wpConfigPath Path to wp-config.php
-     * @return bool Success
+     * @throws Exception If regeneration fails
      */
     public function regenerate($wpConfigPath) {
         $this->logger->log('Regenerating WordPress security keys...');
         
         if (!file_exists($wpConfigPath)) {
-            $this->logger->error('wp-config.php not found');
-            return false;
+            throw new Exception('wp-config.php not found');
         }
         
         $content = file_get_contents($wpConfigPath);
         
+        // All 8 keys that need regeneration
         $keys = [
             'AUTH_KEY',
             'SECURE_AUTH_KEY',
@@ -47,20 +45,28 @@ class SecurityKeys {
             'NONCE_SALT'
         ];
         
+        // Replace each key
         foreach ($keys as $key) {
             $newValue = $this->generateKey(64);
-            $pattern = "/define\s*\(\s*['\"]{$key}['\"]\s*,\s*['\"][^'\"]*['\"]\s*\)/";
+            $pattern = "/define\\s*\\(\\s*['\"]{$key}['\"]\\s*,\\s*['\"][^'\"]*['\"]\\s*\\)/";
             $replacement = "define('{$key}', '{$newValue}')";
             $content = preg_replace($pattern, $replacement, $content);
         }
         
-        if (file_put_contents($wpConfigPath, $content) !== false) {
-            $this->logger->log('✓ All 8 security keys regenerated successfully');
-            return true;
+        // Write updated config
+        if (file_put_contents($wpConfigPath, $content) === false) {
+            throw new Exception('Failed to write wp-config.php');
         }
         
-        $this->logger->error('Failed to write wp-config.php');
-        return false;
+        $this->logger->log('✓ All 8 security keys regenerated successfully');
+        $this->logger->log('  - AUTH_KEY');
+        $this->logger->log('  - SECURE_AUTH_KEY');
+        $this->logger->log('  - LOGGED_IN_KEY');
+        $this->logger->log('  - NONCE_KEY');
+        $this->logger->log('  - AUTH_SALT');
+        $this->logger->log('  - SECURE_AUTH_SALT');
+        $this->logger->log('  - LOGGED_IN_SALT');
+        $this->logger->log('  - NONCE_SALT');
     }
     
     /**
@@ -73,6 +79,7 @@ class SecurityKeys {
         $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}|;:,.<>?';
         $key = '';
         $charsLength = strlen($chars);
+        
         $randomBytes = random_bytes($length);
         
         for ($i = 0; $i < $length; $i++) {
